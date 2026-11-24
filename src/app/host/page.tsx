@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Leaderboard, winnerBanner } from "@/components/Game";
+import { Leaderboard, VISUAL_SCALE, winnerBanner } from "@/components/Game";
 import OceanScene from "@/components/OceanScene";
 import { SubIcon } from "@/components/PixelBits";
 import { POLL_MS } from "@/lib/config";
@@ -70,7 +70,7 @@ export default function HostPage() {
 
   return (
     <>
-      <OceanScene mode="landing" depth={0} />
+      <OceanScene mode="landing" depth={0} visualScale={VISUAL_SCALE} />
       <main className="app">
         {offline && (
           <div role="status" className="hud-chip" style={{ position: "fixed", bottom: 12, right: 12, zIndex: 40, flexDirection: "row" }}>
