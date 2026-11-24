@@ -159,6 +159,114 @@ export const HOUSE_B: Sprite = [
   ".tmmt.",
 ];
 
+/* ---------------------------------------------------------------- depth-zone creatures
+ * Cute, round, retro: never scary. "L" marks a light organ (drawn bright, then haloed in code).
+ */
+
+// Shallow: tiny shrimp, facing left. a = antenna, p/P = body shades.
+export const SHRIMP: Sprite = [
+  "aa.......",
+  "..apppp..",
+  ".epppppp.",
+  "..ppppPPP",
+  "...p.p..P",
+];
+
+// Shallow: starfish (tint y).
+export const STARFISH: Sprite = [
+  "...y...",
+  "..yyy..",
+  "yyyyyyy",
+  ".yyYyy.",
+  "..yyy..",
+  ".yy.yy.",
+  "yy...yy",
+];
+
+// Mid: small squid, two jet frames (tint q / Q).
+export const SQUID_A: Sprite = [
+  "...q...",
+  "..qqq..",
+  ".qqqqq.",
+  ".qqqqq.",
+  "qqqqqqq",
+  "qeqqqeq",
+  ".QQQQQ.",
+  ".Q.Q.Q.",
+  ".Q.Q.Q.",
+  "Q..Q..Q",
+];
+export const SQUID_B: Sprite = [
+  "...q...",
+  "..qqq..",
+  ".qqqqq.",
+  ".qqqqq.",
+  "qqqqqqq",
+  "qeqqqeq",
+  ".QQQQQ.",
+  "..QQQ..",
+  "..QQQ..",
+  "..Q.Q..",
+];
+
+// Deep: dark fish with a glowing eye spot, facing left.
+export const DEEPFISH: Sprite = [
+  "...dd.....",
+  ".dddddd..d",
+  "Lddddddddd",
+  ".dddddd..d",
+  "...dd.....",
+];
+
+// Deep sea: lanternfish with a row of photophores (L), facing left.
+export const LANTERN: Sprite = [
+  "..aaaa.....",
+  ".aaaaaaa..a",
+  "ahaaaaaaaaa",
+  ".LaLaLaLa.a",
+  "..aaaa.....",
+];
+
+// Deep sea: round, friendly anglerfish with its glowing lure (L), facing left.
+export const ANGLER: Sprite = [
+  "L...............",
+  ".s..............",
+  "..s.............",
+  "...ss...........",
+  ".....oooooo.....",
+  "...oooooooooo..O",
+  "..ohhoooooooooOO",
+  ".oohkoooooooooO.",
+  "ooooooooooooooOO",
+  "ow.w.ooooooooo.O",
+  ".oooooooooooo...",
+  "...ooooooo......",
+];
+
+// Deep sea (rare): dumbo octopus, two ear-fin frames. m body, f fins, P blush.
+export const DUMBO_A: Sprite = [
+  "ff..mmmm..ff",
+  "fffmmmmmmfff",
+  ".fmmmmmmmmf.",
+  "..mkmmmmkm..",
+  "..PmmmmmmP..",
+  "..mmmmmmmm..",
+  "..m.m..m.m..",
+  ".m..m..m..m.",
+  "m...m..m...m",
+];
+export const DUMBO_B: Sprite = [
+  "....mmmm....",
+  "...mmmmmm...",
+  "ffmmmmmmmmff",
+  "ffmkmmmmkmff",
+  ".fPmmmmmmPf.",
+  "..mmmmmmmm..",
+  "..m.m..m.m..",
+  "..m.m..m.m..",
+  ".m..m..m..m.",
+];
+
 export interface SpriteCache {
   get(sprite: Sprite, tint?: Record<string, string>, flip?: boolean): HTMLCanvasElement;
 }

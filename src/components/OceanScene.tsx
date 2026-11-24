@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { FULL_DARK_M, ZONES, zoneIndexAt } from "@/lib/zones";
 import {
   BOAT,
   CLOUD_A,
@@ -18,6 +19,15 @@ import {
   PROP_B,
   SHELL,
   SUB,
+  SHRIMP,
+  STARFISH,
+  SQUID_A,
+  SQUID_B,
+  DEEPFISH,
+  LANTERN,
+  ANGLER,
+  DUMBO_A,
+  DUMBO_B,
   type Sprite,
 } from "./sprites";
 
@@ -50,24 +60,26 @@ export interface OceanSceneProps {
   visualScale?: number;
 }
 
-const SEABED_M = 770;
+/** Sea floor, REAL meters (glimpsed only at the very bottom of a perfect run). */
+const SEABED_REAL_M = 232;
 const SUB_OFFSET_M = 10;
 const LANDING_CAM_M = -18;
 const ANCHOR = 0.3; // sub's vertical position as a fraction of the viewport
 const DIVE_MS = 900;
 const MODE_MS = 1500;
 
-// depth color stops (meters -> rgb)
+// Water color by REAL depth (meters): bright blue → blue → dark blue → indigo → a rich deep navy at 170 m,
+// which then stays constant (never black).
 const STOPS: [number, [number, number, number]][] = [
   [0, [42, 157, 230]],
-  [60, [31, 134, 209]],
-  [180, [22, 107, 184]],
-  [320, [15, 79, 151]],
-  [480, [10, 54, 114]],
-  [640, [6, 34, 79]],
-  [820, [3, 20, 54]],
+  [20, [31, 134, 209]],
+  [45, [23, 110, 188]],
+  [70, [18, 88, 163]],
+  [95, [15, 66, 134]],
+  [120, [13, 48, 108]],
+  [145, [12, 33, 84]],
+  [FULL_DARK_M, [9, 22, 62]],
 ];
-
 function depthRgb(d: number): [number, number, number] {
   if (d <= STOPS[0][0]) return STOPS[0][1];
   for (let i = 1; i < STOPS.length; i++) {
@@ -108,6 +120,7 @@ const tweenValue = (tw: Tween, now: number) => {
 };
 
 interface Fish {
+  /** REAL meters */
   d: number;
   x0: number;
   v: number;
@@ -117,51 +130,120 @@ interface Fish {
   par: number;
 }
 
+const smooth = (a: number, b: number, x: number) => {
+  const k = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return k * k * (3 - 2 * k);
+};
+
+/**
+ * The ocean's inhabitants, placed by REAL depth so each zone has its own fauna:
+ *  shallow (0–40 m)  bright fish, shrimp, a reef ledge with starfish & shells
+ *  mid     (40–90)   squid, medium fish, fish schools, jellyfish, a far whale
+ *  deep    (90–140)  dark fish with glowing eyes, a giant shadow, glow jellies
+ *  abyss   (140+)    anglerfish, lanternfish in green/blue/yellow/purple, a rare dumbo octopus
+ * Counts are kept low so the scene stays readable.
+ */
 function buildWorld() {
   const rnd = mulberry32(20261123);
-  const fish: Fish[] = [];
+  const between = (a: number, b: number) => a + rnd() * (b - a);
+  const dir = () => (rnd() < 0.5 ? -1 : 1);
   const sunlit = [
     { a: "#ffd23f", d: "#f59e2b" },
     { a: "#ff9ec7", d: "#ff6f91" },
     { a: "#7fe8ff", d: "#3aa7e8" },
     { a: "#ffffff", d: "#a9d8f5" },
   ];
-  for (let i = 0; i < 60; i++) {
-    const d = 6 + rnd() * 720;
-    const zone = d < 260 ? 0 : d < 520 ? 1 : 2;
-    const col = zone === 0 ? sunlit[i % sunlit.length] : zone === 1 ? { a: "#8fb7ff", d: "#5c7fd6" } : { a: "#4ff0e0", d: "#1fb5c9" };
-    fish.push({
-      d,
-      x0: rnd() * 2000,
-      v: (rnd() < 0.5 ? -1 : 1) * (5 + rnd() * 9),
-      sprite: zone === 2 ? FISH_TINY : rnd() < 0.55 ? FISH_A : FISH_B,
-      tint: { a: col.a, d: col.d, e: "#0b1a3d" },
-      phase: rnd() * 6.28,
-      par: 1,
-    });
+  // shallow: colorful small fish
+  const fish: Fish[] = [];
+  for (let i = 0; i < 14; i++) {
+    const col = sunlit[i % sunlit.length];
+    fish.push({ d: between(3, 38), x0: rnd() * 2000, v: dir() * between(6, 13), sprite: rnd() < 0.5 ? FISH_A : FISH_B, tint: { a: col.a, d: col.d, e: "#0b1a3d" }, phase: rnd() * 6.28, par: 1 });
   }
-  // distant silhouettes (parallax)
+  // mid: medium blue/silver fish
+  for (let i = 0; i < 8; i++) {
+    const silver = i % 3 === 0;
+    fish.push({ d: between(42, 88), x0: rnd() * 2000, v: dir() * between(4, 8), sprite: FISH_A, tint: silver ? { a: "#d6e4f5", d: "#8fa6c6", e: "#0b1a3d" } : { a: "#8fb7ff", d: "#5c7fd6", e: "#0b1a3d" }, phase: rnd() * 6.28, par: 1 });
+  }
+  const shrimp = Array.from({ length: 6 }, (_, i) => ({
+    d: between(5, 34),
+    x0: rnd() * 2000,
+    v: dir() * between(3, 6),
+    phase: rnd() * 6.28,
+    tint: i % 2 ? { a: "#ffd6c9", p: "#ff9e7a", P: "#ff6f91", e: "#0b1a3d" } : { a: "#ffe3ef", p: "#ffb3c7", P: "#ff7fa3", e: "#0b1a3d" },
+  }));
+  // mid: schools of tiny fish that move together
+  const schools = [55, 68, 82].map((d, si) => ({
+    d,
+    x0: rnd() * 2000,
+    v: (si % 2 ? -1 : 1) * between(7, 10),
+    phase: rnd() * 6.28,
+    tint: si === 1 ? { a: "#ffe98a", e: "#0b1a3d" } : { a: "#b9e6ff", e: "#0b1a3d" },
+    members: Array.from({ length: 7 }, (_, k) => ({ dx: (k % 4) * 6 + (k > 3 ? 3 : 0), dd: (k > 3 ? 1.6 : 0) + (k % 2) * 0.6 })),
+  }));
+  const squid = Array.from({ length: 4 }, () => ({ d: between(48, 88), x0: rnd() * 2000, v: dir() * between(2, 4), phase: rnd() * 6.28 }));
+  const jellies = Array.from({ length: 4 }, () => ({ d: between(60, 102), x0: rnd() * 2000, phase: rnd() * 6.28, v: 1 + rnd() * 2 }));
+  // deep: dark fish with glowing eyes + glowing jellies
+  const deepfish = Array.from({ length: 6 }, (_, i) => ({
+    d: between(92, 140),
+    x0: rnd() * 2000,
+    v: dir() * between(3, 6),
+    phase: rnd() * 6.28,
+    tint: { d: i % 2 ? "#1d4a63" : "#22405e", L: i % 3 ? "#9ffcf0" : "#fff2a8" },
+  }));
+  const glowJellies = Array.from({ length: 7 }, (_, i) => ({
+    d: i < 2 ? between(118, 140) : between(146, 212),
+    x0: rnd() * 2000,
+    phase: rnd() * 6.28,
+    v: 0.6 + rnd() * 1.2,
+    tint: i % 2 ? { p: "#c39bff", P: "#8a5cf0", h: "#ffffff" } : { p: "#7ff7ee", P: "#2ec9c0", h: "#ffffff" },
+    glow: i % 2 ? "195,155,255" : "127,247,238",
+  }));
+  // abyss: lanternfish in green / blue / yellow / purple, anglerfish, one rare dumbo octopus
+  const lanternCols = [
+    { a: "#3fbf7f", h: "#d9ffe9", L: "#b6ffd6", g: "120,255,180" },
+    { a: "#3f7fe0", h: "#dce9ff", L: "#9fd0ff", g: "140,200,255" },
+    { a: "#d8b23a", h: "#fff6cc", L: "#fff2a8", g: "255,236,140" },
+    { a: "#8a5cd6", h: "#efe2ff", L: "#e0c8ff", g: "205,170,255" },
+  ];
+  const lanterns = Array.from({ length: 12 }, (_, i) => {
+    const c = lanternCols[i % 4];
+    return { d: between(142, 214), x0: rnd() * 2000, v: dir() * between(3, 7), phase: rnd() * 6.28, tint: { a: c.a, h: c.h, L: c.L }, glow: c.g };
+  });
+  const anglers = [152, 178, 203].map((d, i) => ({
+    d,
+    x0: rnd() * 2000,
+    v: (i % 2 ? 1 : -1) * between(1.6, 2.6),
+    phase: rnd() * 6.28,
+    tint: i === 1 ? { o: "#4b5fae", O: "#33468a", s: "#6f7fc0", h: "#ffffff", k: "#0b1a3d", w: "#e8f8ff", L: "#fff7b0" } : { o: "#6a4fa8", O: "#4c3786", s: "#8a74c4", h: "#ffffff", k: "#0b1a3d", w: "#e8f8ff", L: "#fff7b0" },
+  }));
+  const dumbo = { d: 191, x0: rnd() * 2000, v: 1.4, phase: 0 };
+  // distant silhouettes (parallax), only in the lit upper ocean
   const far: Fish[] = [];
-  for (let i = 0; i < 40; i++) {
-    far.push({
-      d: rnd() * 1300,
-      x0: rnd() * 2000,
-      v: (rnd() < 0.5 ? -1 : 1) * (2 + rnd() * 4),
-      sprite: rnd() < 0.5 ? FISH_TINY : FISH_B,
-      tint: {},
-      phase: rnd() * 6.28,
-      par: 0.55,
-    });
+  for (let i = 0; i < 18; i++) {
+    far.push({ d: between(10, 120), x0: rnd() * 2000, v: dir() * between(2, 5), sprite: rnd() < 0.5 ? FISH_TINY : FISH_B, tint: {}, phase: rnd() * 6.28, par: 0.55 });
   }
-  const jellies = Array.from({ length: 12 }, () => ({ d: 220 + rnd() * 360, x0: rnd() * 2000, phase: rnd() * 6.28, v: 1 + rnd() * 2 }));
-  const bubbles = Array.from({ length: 34 }, () => ({ d: rnd() * 120, x: rnd(), r: rnd() < 0.2 ? 2 : 1, v: 7 + rnd() * 8, wob: rnd() * 6.28 }));
-  const snow = Array.from({ length: 70 }, () => ({ d: rnd() * 900, x: rnd(), v: 0.6 + rnd() * 1.2 }));
-  const kelp = Array.from({ length: 16 }, () => ({ x: rnd(), h: 18 + rnd() * 34, phase: rnd() * 6.28 }));
-  const corals = Array.from({ length: 6 }, () => ({ x: rnd(), hue: rnd() < 0.5 ? 0 : 1 }));
+  // shallow reef ledges on the screen edges (start/end depth, REAL m), with starfish, shells, seaweed
+  const reefs = [
+    { side: "left" as const, top: 6, bottom: 44, w: 18, seed: rnd() * 10 },
+    { side: "right" as const, top: 17, bottom: 35, w: 11, seed: rnd() * 10 },
+  ];
+  const reefDeco = [
+    { reef: 0, d: 12, kind: "star", tint: { y: "#ff9a3c", Y: "#ffd23f" } },
+    { reef: 0, d: 24, kind: "shell" },
+    { reef: 0, d: 31, kind: "star", tint: { y: "#ff7fa3", Y: "#ffd0e0" } },
+    { reef: 0, d: 18, kind: "weed" },
+    { reef: 0, d: 37, kind: "weed" },
+    { reef: 1, d: 22, kind: "star", tint: { y: "#ffd23f", Y: "#fff6c2" } },
+    { reef: 1, d: 29, kind: "weed" },
+  ];
+  const caustics = Array.from({ length: 28 }, () => ({ d: between(1, 26), x: rnd(), phase: rnd() * 6.28, w: rnd() < 0.5 ? 2 : 3 }));
+  const bubbles = Array.from({ length: 30 }, () => ({ d: rnd() * 40, x: rnd(), r: rnd() < 0.2 ? 2 : 1, v: 7 + rnd() * 8, wob: rnd() * 6.28 }));
+  const snow = Array.from({ length: 64 }, () => ({ d: rnd() * 240, x: rnd(), v: 0.25 + rnd() * 0.5, tw: rnd() * 6.28 }));
   const rocks = Array.from({ length: 9 }, () => ({ x: rnd(), w: 6 + rnd() * 14, h: 3 + rnd() * 6 }));
+  const anemones = Array.from({ length: 10 }, (_, i) => ({ x: rnd(), h: 3 + Math.round(rnd() * 5), col: i % 2 ? "127,247,238" : "195,155,255", phase: rnd() * 6.28 }));
   const clouds = Array.from({ length: 6 }, (_, i) => ({ x0: rnd() * 1.4, alt: 12 + rnd() * 34, big: i % 2 === 0, v: 1 + rnd() * 2 }));
   const sparkles = Array.from({ length: 22 }, () => ({ x: rnd(), dy: 2 + rnd() * 10, phase: rnd() * 6.28 }));
-  return { fish, far, jellies, bubbles, snow, kelp, corals, rocks, clouds, sparkles, rnd };
+  return { fish, far, shrimp, schools, squid, jellies, deepfish, glowJellies, lanterns, anglers, dumbo, reefs, reefDeco, caustics, bubbles, snow, rocks, anemones, clouds, sparkles, rnd };
 }
 
 function makeWhale(): HTMLCanvasElement {
@@ -189,6 +271,23 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
   const depthLabelRef = useRef<HTMLSpanElement>(null);
+  const zoneChipRef = useRef<HTMLDivElement>(null);
+  // "Entering Mid Water"-style banner when the player's dive crosses into a deeper zone
+  const [zoneToast, setZoneToast] = useState<{ name: string; color: string; key: number } | null>(null);
+  const zoneRef = useRef(zoneIndexAt(realDepth));
+  useEffect(() => {
+    const z = zoneIndexAt(realDepth);
+    const prev = zoneRef.current;
+    zoneRef.current = z;
+    if (mode !== "game" || z <= prev) return;
+    const zone = ZONES[z];
+    const show = setTimeout(() => setZoneToast({ name: zone.name, color: zone.color, key: Date.now() }), 650);
+    const hide = setTimeout(() => setZoneToast(null), 650 + 3000);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(hide);
+    };
+  }, [realDepth, mode]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(visualScale);
   useEffect(() => {
@@ -350,17 +449,55 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
         ctx.fillRect(Math.round(cw * 0.2) + 11, baseY, 1, 4);
       }
 
-      // ---------- water body (banded by depth)
+      // ---------- depth bookkeeping (REAL meters; the scene draws VISUAL_SCALE scene meters per real meter)
+      const S = scaleRef.current;
+      const syR = (r: number) => sy(r * S);
+      const subR = Math.max(0, (cam - SUB_OFFSET_M) / S);
+      const viewTopR = (cam - anchor / M) / S;
+      const viewBotR = (cam + (ch - anchor) / M) / S;
+      const span = cw + 40;
+      const wrapP = (p: number) => Math.round(((p % span) + span) % span) - 20;
+      const wrapX = (x0: number, v: number) => wrapP(x0 + v * t);
+      const visible = (y: number, h = 12) => y > wl + 4 && y < ch + h && y > -h;
+      const gaugeArt = blend > 0.5 ? (cw * P > 520 ? 54 : 46) / P : 0;
+      /** soft pixel halo for bioluminescence: additive stepped discs, brighter toward the center */
+      const glow = (x: number, y: number, col: string, r: number, a: number) => {
+        const cx = Math.round(x);
+        const cy = Math.round(y);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        for (let i = r; i >= 1; i--) {
+          ctx.fillStyle = `rgba(${col},${(a * 0.16 * (1 - (i - 1) / r)).toFixed(3)})`;
+          for (let dy = -i; dy <= i; dy++) {
+            const hw = Math.round(Math.sqrt(i * i - dy * dy));
+            ctx.fillRect(cx - hw, cy + dy, 2 * hw + 1, 1);
+          }
+        }
+        ctx.restore();
+      };
+
+      // ---------- water body (banded by real depth, quantized every 3 m)
       const startY = Math.max(0, wli + 3);
       for (let y = startY - (startY % 2); y < ch; y += 2) {
-        const d = cam + (y - anchor) / M;
-        const dq = Math.floor(d / 9) * 9;
-        ctx.fillStyle = rgb(depthRgb(dq));
+        const dr = (cam + (y - anchor) / M) / S;
+        ctx.fillStyle = rgb(depthRgb(Math.floor(dr / 3) * 3));
         ctx.fillRect(0, y, cw, 2);
       }
 
-      // ---------- light rays near the surface
-      const rayStrength = Math.max(0, 1 - Math.max(0, cam) / 280);
+      // ---------- shallow: shimmering wave-light (caustics)
+      if (subR < 45) {
+        for (const c of world.caustics) {
+          const y = Math.round(syR(c.d));
+          if (!visible(y, 4)) continue;
+          const a = (1 - c.d / 28) * 0.22 * (0.5 + 0.5 * Math.sin(t * 2.2 + c.phase));
+          if (a <= 0.02) continue;
+          ctx.fillStyle = `rgba(232,248,255,${a.toFixed(3)})`;
+          ctx.fillRect(Math.round(c.x * cw + Math.sin(t * 0.7 + c.phase) * 3), y, c.w, 1);
+        }
+      }
+
+      // ---------- sunlight rays: strong at the surface, gone by ~70 m
+      const rayStrength = 1 - smooth(0, 70, subR);
       if (rayStrength > 0.02) {
         ctx.save();
         ctx.globalAlpha = 0.07 * rayStrength;
@@ -368,7 +505,7 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
         for (let i = 0; i < 6; i++) {
           const x = (i / 6) * cw + Math.sin(t * 0.3 + i) * 8;
           const top = Math.max(wl + 3, 0);
-          const len = 260 * M;
+          const len = 90 * S * M;
           ctx.beginPath();
           ctx.moveTo(Math.round(x), top);
           ctx.lineTo(Math.round(x + 10), top);
@@ -380,85 +517,134 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
         ctx.restore();
       }
 
-      const span = cw + 40;
-      const wrapX = (x0: number, v: number) => Math.round((((x0 + v * t) % span) + span) % span) - 20;
-
-      // ---------- far silhouettes (parallax)
+      // ---------- far silhouettes (parallax, lit upper ocean)
       for (const f of world.far) {
-        const y = Math.round(anchor + (f.d - cam * f.par) * M * f.par + Math.sin(t + f.phase) * 1.5);
-        if (y < wl + 6 || y > ch + 10 || y < -10) continue;
-        const dd = cam + (y - anchor) / M;
-        const c = depthRgb(dd);
+        const y = Math.round(anchor + (f.d * S - cam * f.par) * M * f.par + Math.sin(t + f.phase) * 1.5);
+        if (!visible(y, 10)) continue;
+        const c = depthRgb((cam + (y - anchor) / M) / S);
         const spr = sprites.get(f.sprite, { a: rgb(c, 0.72), d: rgb(c, 0.72), e: rgb(c, 0.72) }, f.v > 0);
         ctx.drawImage(spr, wrapX(f.x0, f.v), y);
       }
-      // whale (between 120 and 340 m, slow)
+      // mid: whale far away (parallax 0.5)
       {
-        const wd = 230;
-        const y = Math.round(anchor + (wd - cam * 0.5) * M * 0.5);
+        const y = Math.round(anchor + (77 * S - cam * 0.5) * M * 0.5);
         if (y > wl + 10 && y < ch + 20) {
           ctx.save();
-          ctx.globalAlpha = 0.22;
+          ctx.globalAlpha = 0.2;
           const wx = Math.round((((cw + 80 - t * 3) % (cw + 120)) + cw + 120) % (cw + 120)) - 60;
           ctx.drawImage(whale, wx, y);
           ctx.restore();
         }
       }
-
-      // ---------- marine snow / glow (visible deeper)
-      for (const s of world.snow) {
-        s.d += s.v * dt;
-        const viewTop = cam - anchor / M;
-        const viewBot = cam + (ch - anchor) / M;
-        if (s.d > viewBot + 5) s.d = viewTop - 2;
-        if (s.d < viewTop - 5) s.d = viewBot;
-        if (s.d < 40) continue;
-        const y = Math.round(sy(s.d));
-        const alpha = Math.min(0.85, (s.d - 40) / 400);
-        ctx.fillStyle = s.d > 450 ? `rgba(79,240,224,${alpha * 0.8})` : `rgba(232,248,255,${alpha * 0.5})`;
-        ctx.fillRect(Math.round(s.x * cw + Math.sin(t * 0.5 + s.d) * 2), y, 1, 1);
+      // deep: a giant slow shadow passing in the background
+      {
+        const y = Math.round(anchor + (126 * S - cam * 0.7) * M * 0.7);
+        if (y > wl + 10 && y < ch + 40) {
+          ctx.save();
+          ctx.globalAlpha = 0.28;
+          const W2 = whale.width * 2;
+          const wx = Math.round((((t * 2.2) % (cw + W2 + 40)) + cw + W2 + 40) % (cw + W2 + 40)) - W2 - 20;
+          ctx.translate(wx + W2, y);
+          ctx.scale(-1, 1); // swims to the right
+          ctx.drawImage(whale, 0, 0, W2, whale.height * 2);
+          ctx.restore();
+        }
       }
 
-      // ---------- seabed
-      const bedY = Math.round(sy(SEABED_M));
-      if (bedY < ch + 60) {
-        for (const k of world.kelp) {
-          const kx = Math.round(k.x * cw);
-          for (let i = 0; i < k.h; i++) {
-            const sway = Math.round(Math.sin(t * 1.2 + k.phase + i * 0.15) * (i / k.h) * 4);
-            ctx.fillStyle = i % 6 < 3 ? "#1d7f63" : "#239a74";
-            ctx.fillRect(kx + sway, bedY - i, 2, 1);
-            if (i % 7 === 3) ctx.fillRect(kx + sway + (i % 14 === 3 ? 2 : -2), bedY - i, 2, 1);
+      // ---------- shallow reef ledges with starfish, shells and seaweed
+      for (const r of world.reefs) {
+        const yTop = Math.round(syR(r.top));
+        const yBot = Math.round(syR(r.bottom));
+        if (yBot < wl || yTop > ch) continue;
+        for (let y = Math.max(yTop, Math.ceil(wl) + 3); y <= Math.min(yBot, ch); y += 2) {
+          const k = (y - yTop) / Math.max(1, yBot - yTop);
+          const bulge = Math.sin(k * Math.PI) * 0.8 + 0.2;
+          const w = Math.round(gaugeArt + r.w * bulge + Math.sin(y * 0.35 + r.seed) * 2);
+          const x = r.side === "left" ? 0 : cw - w;
+          ctx.fillStyle = "#24557a";
+          ctx.fillRect(x, y, w, 2);
+          // rock texture: darker pits and a sunlit rim on the open-water edge
+          const pit = Math.floor(Math.abs(Math.sin(y * 12.9898 + r.seed) * 43758.5453) % w);
+          ctx.fillStyle = "#1b4466";
+          if (w > 4) ctx.fillRect(x + pit, y, 3, 2);
+          ctx.fillStyle = "#4a88b0";
+          ctx.fillRect(r.side === "left" ? x + w - 2 : x, y, 2, 1);
+        }
+      }
+      for (const dcor of world.reefDeco) {
+        const r = world.reefs[dcor.reef];
+        const y = Math.round(syR(dcor.d));
+        if (!visible(y, 10)) continue;
+        const k = (dcor.d - r.top) / (r.bottom - r.top);
+        const w = Math.round(gaugeArt + r.w * (Math.sin(k * Math.PI) * 0.8 + 0.2) + Math.sin(y * 0.35 + r.seed) * 2);
+        const edge = r.side === "left" ? w : cw - w;
+        if (dcor.kind === "star") {
+          const spr = sprites.get(STARFISH, dcor.tint);
+          ctx.drawImage(spr, r.side === "left" ? edge - spr.width + 1 : edge - 1, y - 3);
+        } else if (dcor.kind === "shell") {
+          const spr = sprites.get(SHELL);
+          ctx.drawImage(spr, r.side === "left" ? edge - spr.width : edge, y - 2);
+        } else {
+          for (let i = 0; i < 9; i++) {
+            const sway = Math.round(Math.sin(t * 1.4 + dcor.d + i * 0.3) * (i / 9) * 3);
+            ctx.fillStyle = i % 4 < 2 ? "#2fbf71" : "#1d9a5c";
+            ctx.fillRect((r.side === "left" ? edge : edge - 2) + sway + (r.side === "left" ? 0 : 0), y - i, 2, 1);
           }
         }
-        ctx.fillStyle = "#3b3f74";
+      }
+
+      // ---------- sea floor (only at the very bottom of a perfect run)
+      const bedY = Math.round(syR(SEABED_REAL_M));
+      if (bedY < ch + 60) {
+        ctx.fillStyle = "#141a46";
         ctx.fillRect(0, bedY, cw, ch);
         for (let x = 0; x < cw; x += 2) {
           const bump = Math.round(Math.sin(x * 0.07) * 2 + Math.sin(x * 0.19) * 1);
-          ctx.fillStyle = "#4b4f87";
+          ctx.fillStyle = "#1d2560";
           ctx.fillRect(x, bedY - 2 + bump, 2, 3);
-          ctx.fillStyle = "#5c5f99";
+          ctx.fillStyle = "#2a3378";
           ctx.fillRect(x, bedY - 2 + bump, 2, 1);
         }
         for (const r of world.rocks) {
-          ctx.fillStyle = "#262b52";
+          ctx.fillStyle = "#10153a";
           ctx.fillRect(Math.round(r.x * cw), bedY - r.h, Math.round(r.w), Math.round(r.h) + 1);
-          ctx.fillStyle = "#33386a";
+          ctx.fillStyle = "#1b2252";
           ctx.fillRect(Math.round(r.x * cw) + 1, bedY - r.h, Math.round(r.w) - 2, 1);
         }
-        for (const c of world.corals) {
-          const spr = sprites.get(CORAL, c.hue ? { P: "#ff9ec7" } : undefined);
-          ctx.drawImage(spr, Math.round(c.x * cw), bedY - spr.height + 1);
-        }
-        const shell = sprites.get(SHELL);
-        ctx.drawImage(shell, Math.round(cw * 0.62), bedY - 2);
-        ctx.drawImage(shell, Math.round(cw * 0.18), bedY);
       }
 
-      // ---------- jellyfish
+      // ---------- sunlit & mid-water life (dims with depth via the overlay below)
+      for (const f of world.fish) {
+        const y = Math.round(syR(f.d) + Math.sin(t * 1.6 + f.phase) * 1.2);
+        if (!visible(y, 8)) continue;
+        ctx.drawImage(sprites.get(f.sprite, f.tint, f.v > 0), wrapX(f.x0, f.v), y);
+      }
+      for (const sh of world.shrimp) {
+        const y = Math.round(syR(sh.d) + Math.abs(Math.sin(t * 2 + sh.phase)) * -1.5);
+        if (!visible(y, 6)) continue;
+        // little hops: speed pulses
+        const x = wrapP(sh.x0 + sh.v * (t + 0.45 * Math.sin(t * 3 + sh.phase)));
+        ctx.drawImage(sprites.get(SHRIMP, sh.tint, sh.v > 0), x, y);
+      }
+      for (const sc of world.schools) {
+        const baseY = syR(sc.d);
+        if (!visible(Math.round(baseY), 14)) continue;
+        const bx = wrapX(sc.x0, sc.v);
+        for (const m of sc.members) {
+          const y = Math.round(baseY + m.dd * S * M + Math.sin(t * 2.4 + sc.phase + m.dx * 0.3) * 1);
+          const x = bx + (sc.v > 0 ? -m.dx : m.dx);
+          ctx.drawImage(sprites.get(FISH_TINY, sc.tint, sc.v > 0), x, y);
+        }
+      }
+      for (const sq of world.squid) {
+        const jet = Math.sin(t * 1.8 + sq.phase);
+        const y = Math.round(syR(sq.d) - (jet > 0 ? jet * 2 : 0));
+        if (!visible(y, 12)) continue;
+        ctx.drawImage(sprites.get(jet > 0.3 ? SQUID_B : SQUID_A, { q: "#f0c2dc", Q: "#d68fb8", e: "#0b1a3d" }), wrapX(sq.x0, sq.v), y);
+      }
       for (const j of world.jellies) {
-        const y = Math.round(sy(j.d + Math.sin(t * 0.8 + j.phase) * 4));
-        if (y < wl + 8 || y > ch + 10 || y < -10) continue;
+        const y = Math.round(syR(j.d + Math.sin(t * 0.8 + j.phase) * 1.4));
+        if (!visible(y, 10)) continue;
         const spr = sprites.get(Math.floor(t * 2 + j.phase) % 2 ? JELLY_A : JELLY_B);
         ctx.save();
         ctx.globalAlpha = 0.85;
@@ -466,26 +652,106 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
         ctx.restore();
       }
 
-      // ---------- fish
-      for (const f of world.fish) {
-        const y = Math.round(sy(f.d) + Math.sin(t * 1.6 + f.phase) * 1.2);
-        if (y < wl + 5 || y > ch + 8 || y < -8) continue;
-        ctx.drawImage(sprites.get(f.sprite, f.tint, f.v > 0), wrapX(f.x0, f.v), y);
+      // ---------- darkness tied to the player's depth. Dims the world, never to black (the sub and
+      // the glowing creatures below are drawn after it, so they keep their contrast)
+      const overlayA = 0.38 * smooth(25, FULL_DARK_M, subR);
+      if (overlayA > 0.005) {
+        ctx.fillStyle = `rgba(4,10,40,${overlayA.toFixed(3)})`;
+        ctx.fillRect(0, 0, cw, ch);
+      }
+
+      // ---------- marine snow → glowing plankton deeper down
+      for (const sn of world.snow) {
+        sn.d += sn.v * dt;
+        if (sn.d > viewBotR + 2) sn.d = viewTopR - 1;
+        if (sn.d < viewTopR - 2) sn.d = viewBotR;
+        if (sn.d < 15) continue;
+        const y = Math.round(syR(sn.d));
+        if (!visible(y, 2)) continue;
+        const x = Math.round(sn.x * cw + Math.sin(t * 0.5 + sn.d) * 2);
+        if (sn.d > 100) {
+          const tw = 0.45 + 0.55 * Math.sin(t * 1.5 + sn.tw);
+          const col = sn.tw > 4.2 ? "195,155,255" : sn.tw > 2.1 ? "127,247,238" : "160,210,255";
+          ctx.fillStyle = `rgba(${col},${(0.35 + 0.5 * tw * smooth(100, 150, sn.d)).toFixed(3)})`;
+        } else ctx.fillStyle = `rgba(232,248,255,${(0.12 + 0.35 * smooth(15, 100, sn.d)).toFixed(3)})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+
+      // ---------- deep water: dark fish with glowing eyes
+      for (const f of world.deepfish) {
+        const y = Math.round(syR(f.d) + Math.sin(t * 1.2 + f.phase) * 1.2);
+        if (!visible(y, 8)) continue;
+        const flip = f.v > 0;
+        const spr = sprites.get(DEEPFISH, f.tint, flip);
+        const x = wrapX(f.x0, f.v);
+        ctx.drawImage(spr, x, y);
+        glow(x + (flip ? spr.width - 1 : 0), y + 2, f.tint.L === "#fff2a8" ? "255,236,140" : "127,247,238", 3, 0.8 + 0.2 * Math.sin(t * 3 + f.phase));
+      }
+      // glowing jellies
+      for (const j of world.glowJellies) {
+        const y = Math.round(syR(j.d + Math.sin(t * 0.7 + j.phase) * 1.2));
+        if (!visible(y, 12)) continue;
+        const spr = sprites.get(Math.floor(t * 1.6 + j.phase) % 2 ? JELLY_A : JELLY_B, j.tint);
+        const x = wrapX(j.x0, j.v * 0.5);
+        glow(x + 3, y + 3, j.glow, 6, 0.55 + 0.25 * Math.sin(t * 2 + j.phase));
+        ctx.drawImage(spr, x, y);
+      }
+      // ---------- deep sea: lanternfish (green / blue / yellow / purple) with photophores
+      for (const f of world.lanterns) {
+        const y = Math.round(syR(f.d) + Math.sin(t * 1.5 + f.phase) * 1.2);
+        if (!visible(y, 8)) continue;
+        const flip = f.v > 0;
+        const spr = sprites.get(LANTERN, f.tint, flip);
+        const x = wrapX(f.x0, f.v);
+        glow(x + spr.width / 2, y + 3, f.glow, 4, 0.35 + 0.15 * Math.sin(t * 2.5 + f.phase));
+        ctx.drawImage(spr, x, y);
+      }
+      // anglerfish: the lure pulses and lights up the darkness around it
+      for (const f of world.anglers) {
+        const y = Math.round(syR(f.d) + Math.sin(t * 0.9 + f.phase) * 1.5);
+        if (!visible(y, 16)) continue;
+        const flip = f.v > 0;
+        const spr = sprites.get(ANGLER, f.tint, flip);
+        const x = wrapX(f.x0, f.v);
+        const pulse = 0.75 + 0.25 * Math.sin(t * 3.2 + f.phase);
+        glow(x + (flip ? spr.width - 1 : 0), y, "255,240,150", 7, pulse);
+        ctx.drawImage(spr, x, y);
+        glow(x + (flip ? spr.width - 1 : 0), y, "255,250,210", 2, 1);
+      }
+      // rare: a dumbo octopus gently flapping its ear fins
+      {
+        const dm = world.dumbo;
+        const y = Math.round(syR(dm.d) + Math.sin(t * 1.1) * 2.5);
+        if (visible(y, 12)) {
+          const x = wrapX(dm.x0, dm.v);
+          glow(x + 6, y + 4, "255,170,220", 6, 0.35);
+          ctx.drawImage(sprites.get(Math.floor(t * 2.2) % 2 ? DUMBO_A : DUMBO_B, { m: "#f08fc0", f: "#d86aa8", P: "#ff5f9e", k: "#0b1a3d" }), x, y);
+        }
+      }
+      // glowing anemones on the sea floor
+      if (bedY < ch + 10) {
+        for (const a of world.anemones) {
+          const ax = Math.round(a.x * cw);
+          for (let i = 0; i < a.h; i++) {
+            const sway = Math.round(Math.sin(t * 1.3 + a.phase + i * 0.4) * (i / a.h) * 2);
+            ctx.fillStyle = `rgba(${a.col},0.85)`;
+            ctx.fillRect(ax + sway, bedY - 2 - i, 1, 1);
+          }
+          glow(ax, bedY - 2 - a.h, a.col, 3, 0.7 + 0.3 * Math.sin(t * 2 + a.phase));
+        }
       }
 
       // ---------- ambient bubbles (world-space so they scroll with the dive)
-      const viewTop = cam - anchor / M;
-      const viewBot = cam + (ch - anchor) / M;
       for (const b of world.bubbles) {
-        b.d -= b.v * dt;
-        if (b.d < Math.max(1, viewTop) || b.d > viewBot + 20) {
-          b.d = viewBot + world.rnd() * 25;
+        b.d -= (b.v / S) * dt;
+        if (b.d < Math.max(0.3, viewTopR) || b.d > viewBotR + 7) {
+          b.d = viewBotR + world.rnd() * 8;
           b.x = world.rnd();
         }
-        const y = Math.round(sy(b.d));
+        const y = Math.round(syR(b.d));
         if (y < wl + 4) continue;
         const x = Math.round(b.x * cw + Math.sin(t * 2 + b.wob) * 1.5);
-        ctx.fillStyle = "rgba(200,241,255,0.75)";
+        ctx.fillStyle = b.d > 120 ? "rgba(170,225,255,0.6)" : "rgba(200,241,255,0.75)";
         if (b.r === 1) ctx.fillRect(x, y, 1, 1);
         else {
           ctx.fillRect(x, y - 1, 2, 1);
@@ -495,13 +761,20 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
         }
       }
 
-      // ---------- submarine
-      // darkness of the deep is applied to the world, not to the player's sub
-      const dark = Math.min(0.32, Math.max(0, cam - 60) / 2000);
-      if (dark > 0) {
-        ctx.fillStyle = `rgba(2,10,30,${dark})`;
-        ctx.fillRect(0, 0, cw, ch);
+      // ---------- soft navy vignette in the deep (stepped, pixel style)
+      const vig = 0.3 * smooth(80, FULL_DARK_M, subR);
+      if (vig > 0.01) {
+        for (let i = 0; i < 4; i++) {
+          const inset = Math.round((i + 1) * Math.min(cw, ch) * 0.035);
+          ctx.fillStyle = `rgba(3,8,32,${(vig * (0.32 - i * 0.07)).toFixed(3)})`;
+          ctx.fillRect(0, 0, cw, inset);
+          ctx.fillRect(0, ch - inset, cw, inset);
+          ctx.fillRect(0, 0, inset, ch);
+          ctx.fillRect(cw - inset, 0, inset, ch);
+        }
       }
+
+      // ---------- submarine
       const subSpr = sprites.get(SUB);
       const bob = Math.round(Math.sin(t * 1.8) * (blend > 0.5 ? 1.2 : 0.8));
       let shakeX = 0;
@@ -524,9 +797,21 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
           if (by > wl + 3) ctx.fillRect(subX - 5 - (i % 3), Math.round(by), 1, 1);
         }
       }
+      // headlight beam in the deep (soft additive cone in front of the sub)
+      const beam = smooth(95, 160, subR);
+      if (beam > 0.01 && blend > 0.9) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        for (let i = 0; i < 34; i++) {
+          const h = 3 + Math.round(i * 0.55);
+          ctx.fillStyle = `rgba(210,236,255,${(beam * 0.075 * (1 - i / 34) ** 1.5).toFixed(3)})`;
+          ctx.fillRect(subX + subSpr.width + 1 + i, subY + 8 - Math.floor(h / 2), 1, h);
+        }
+        ctx.restore();
+      }
       ctx.drawImage(subSpr, subX, subY);
       // nose lamp blinks in the deep
-      if (cam > 250 && blend > 0.9 && Math.floor(t * 2) % 2 === 0) {
+      if (subR > 80 && blend > 0.9 && Math.floor(t * 2) % 2 === 0) {
         ctx.fillStyle = "#fff6c2";
         ctx.fillRect(subX + subSpr.width, subY + 8, 1, 1);
         ctx.fillStyle = "rgba(255,246,194,0.35)";
@@ -582,6 +867,16 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
         const shown = Math.max(0, Math.round((cam - SUB_OFFSET_M) / scaleRef.current));
         const txt = `${blend < 0.5 ? 0 : shown} M`;
         if (depthLabelRef.current.textContent !== txt) depthLabelRef.current.textContent = txt;
+        // live zone name under the marker (changes as the sub passes each boundary)
+        const chip = zoneChipRef.current;
+        if (chip) {
+          const zone = ZONES[zoneIndexAt(blend < 0.5 ? 0 : shown)];
+          if (chip.dataset.zone !== zone.id) {
+            chip.dataset.zone = zone.id;
+            chip.textContent = zone.name;
+            chip.style.setProperty("--zone", zone.color);
+          }
+        }
       }
     };
     raf = requestAnimationFrame(draw);
@@ -613,6 +908,18 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
       {showGauge && (
         <div className="gauge">
           <div ref={rulerRef} className="gauge-ruler">
+            {ZONES.map((z, i) => {
+              const to = ZONES[i + 1]?.from ?? maxGauge / visualScale;
+              return (
+                <div
+                  key={z.id}
+                  className="gauge-zone"
+                  style={{ top: `calc(var(--mpx) * ${z.from * visualScale})`, height: `calc(var(--mpx) * ${(to - z.from) * visualScale})`, ["--zone" as string]: z.color }}
+                >
+                  <span>{z.name}</span>
+                </div>
+              );
+            })}
             {ticks.map((d) => (
               <div key={d} className={`gauge-tick ${d % 50 === 0 ? "major" : ""}`} style={{ top: `calc(var(--mpx) * ${d * visualScale})` }}>
                 {d % 50 === 0 && <span>{d}</span>}
@@ -622,6 +929,13 @@ export default function OceanScene({ mode, depth: realDepth, feedback = null, sh
           <div className="gauge-marker">
             <span ref={depthLabelRef}>0 M</span>
           </div>
+          <div ref={zoneChipRef} className="zone-chip" aria-hidden="true" />
+        </div>
+      )}
+      {zoneToast && mode === "game" && (
+        <div key={zoneToast.key} className="zone-toast" style={{ ["--zone" as string]: zoneToast.color }}>
+          <small>Entering</small>
+          {zoneToast.name}
         </div>
       )}
       {feedback?.kind === "correct" && (
