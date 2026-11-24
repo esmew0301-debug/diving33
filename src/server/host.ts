@@ -55,11 +55,13 @@ export async function hostLogout(req: NextRequest) {
   await db.query(`delete from host_sessions where token_hash = $1`, [hashToken(token)]);
 }
 
-export function setHostCookie(res: NextResponse, token: string | null) {
+/** Secure flag whenever the request came over HTTPS (Vercel), so plain-HTTP LAN testing still works. */
+export function setHostCookie(req: NextRequest, res: NextResponse, token: string | null) {
+  const https = req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() === "https";
   res.cookies.set(HOST_COOKIE, token ?? "", {
     httpOnly: true,
     sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
+    secure: https,
     path: "/",
     maxAge: token ? SESSION_HOURS * 3600 : 0,
   });

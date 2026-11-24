@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     await hostLogout(req);
     const res = json({ ok: true });
-    setHostCookie(res, null);
+    setHostCookie(req, res, null);
     return res;
   } catch (e) {
     return handleError(e);

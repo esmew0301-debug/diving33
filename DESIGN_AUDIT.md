@@ -52,3 +52,26 @@ New screens, checked with the same loop (`qa/screenshots/`, desktop 1440×900 an
 * **07–12 play:** unchanged HUD, ocean, dive and stay-put behaviour. The roster now shows teammates' progress (Q3/7, finished).
 * **13 waiting:** "Great job! You've completed the Ocean Dive Challenge", the student's own stats, and a class progress bar ("4 of 16 divers finished · 12 still to join"). No other group's score appears.
 * **14 reveal:** rows rise in from last place to first (stepped 520 ms each, 0.7 s apart) and the credit bars grow. Then the winner banner pops in ("Group 2 wins!" or "It's a tie! Groups 1 & 2") and pulses. Reduced motion shows everything at once.
+
+## Update 2: host/player modes, synchronized rounds, depth scoring (2026-11-23)
+
+The visual system above is unchanged (same canvas ocean, palette, fonts, panels, buttons, HUD, gauge). New screens reuse those tokens and classes. Before screenshots are in `qa/before/`, after screenshots in `qa/screenshots/` (desktop 1440×900, phone 390×844 @2x; no console errors, no horizontal overflow).
+
+| Screen | Built from |
+|---|---|
+| 01 entry: HOST / PLAYER | Landing header unchanged; two `role-card`s styled like group tiles (pink HOST, yellow PLAYER) |
+| 02 waiting for host | Landing panel + bobbing sub + "WAITING FOR THE HOST TO OPEN THE GAME…" |
+| 03/04 host login, host open | Landing header + panel; wrong password = coral input + bounce |
+| 05/06 groups + "Set up your profile" | Existing tiles (now labelled GROUP n, STARTED/FULL) and the existing modal |
+| 07 group waiting room | "GROUP 1", "PLAYERS (n/4)", roster slots with names, Start game |
+| 09–14 play | Same HUD (Team depth replaces credits) and question card; "Worth +30/+20/+10 M" hint |
+| 10 wrong answer | Coral input flash (1.1 s), 460 ms stepped pixel bounce of the form, sub shake + coral pulse, depth unchanged |
+| 11 correct answer | "+30 M" popup (bigger and yellow for 30 m), eased dive whose length and duration scale with the reward, bubble burst sized by reward, gauge ticks |
+| 12 final countdown | Timer bar turns coral and blinks, panel border coral, big popping 3·2·1 next to the timer, blinking coral screen frame; the sub stays visible |
+| 15 complete | "OCEAN DIVE COMPLETE!", "YOUR DEPTH", "WAITING FOR ALL TEAMS TO FINISH…", n/4 teams bar, history link |
+| 16 host waiting | Title + "THE CHALLENGE IS IN PROGRESS" + four group status slots (no scores) |
+| 18 host final results | Existing reveal animation (rows rise 4th→1st, bars grow, winner banner) at projection size: "1ST PLACE — GROUP 2 … 520 M" |
+
+Depth scale: personal depth is at most 7 × 30 = 210 m, so the scene draws 1 real meter as 3 scene meters (`VISUAL_SCALE`) to keep the same trip from the surface into the deep. The gauge labels show real meters.
+
+Iteration fixes: the final-countdown number first covered the submarine, so it moved into the card with a screen-edge flash. The red input stayed red after a wrong answer, so it is now a short flash. Teammate status read "diving…" between questions, so it is now blank. The sub icon on the waiting-for-host screen rendered full-size, so it now has an explicit size.

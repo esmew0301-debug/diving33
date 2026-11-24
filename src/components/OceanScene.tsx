@@ -31,12 +31,14 @@ import {
  * Game meaning of motion:
  *  - camera depth follows the player's PERSONAL depth only. It changes when `depth` changes
  *    (a server-confirmed correct answer). Wrong/timeout feedback never moves the camera.
- *  - feedback "correct": eased dive + bubble trail + "+100 M" popup.
+ *  - feedback "correct": eased dive + bubble trail + "+30 M" popup (bigger rewards dive further,
+ *    a little longer, and with more bubbles).
+ *  - `visualScale` maps real meters to scene meters (gauge labels always show real meters).
  *  - feedback "wrong"/"timeout": small horizontal shake / dim pulse, same depth.
  */
 
 export type SceneMode = "landing" | "game";
-export type SceneFeedback = { kind: "correct" | "wrong" | "timeout"; key: number } | null;
+export type SceneFeedback = { kind: "correct" | "wrong" | "timeout"; key: number; meters?: number } | null;
 
 export interface OceanSceneProps {
   mode: SceneMode;
@@ -44,7 +46,8 @@ export interface OceanSceneProps {
   feedback?: SceneFeedback;
   showGauge?: boolean;
   maxGauge?: number;
-  metersPerCorrect?: number;
+  /** Scene meters per real meter (default 1). */
+  visualScale?: number;
 }
 
 const SEABED_M = 770;
@@ -181,11 +184,16 @@ function makeWhale(): HTMLCanvasElement {
   return c;
 }
 
-export default function OceanScene({ mode, depth, feedback = null, showGauge = false, maxGauge = 800, metersPerCorrect = 100 }: OceanSceneProps) {
+export default function OceanScene({ mode, depth: realDepth, feedback = null, showGauge = false, maxGauge = 800, visualScale = 1 }: OceanSceneProps) {
+  const depth = realDepth * visualScale;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
   const depthLabelRef = useRef<HTMLSpanElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(visualScale);
+  useEffect(() => {
+    scaleRef.current = visualScale;
+  }, [visualScale]);
 
   const live = useRef({
     mode,
@@ -207,7 +215,8 @@ export default function OceanScene({ mode, depth, feedback = null, showGauge = f
     const modeChanged = L.mode !== mode;
     const cur = tweenValue(L.cam, now);
     if (Math.abs(target - L.cam.to) > 0.01) {
-      const dur = L.reduced ? 0 : modeChanged ? MODE_MS : DIVE_MS;
+      // longer dives for bigger rewards: +10 m ≈ 0.75 s, +30 m ≈ 1.2 s (at visualScale 3)
+      const dur = L.reduced ? 0 : modeChanged ? MODE_MS : Math.min(1400, DIVE_MS * 0.6 + Math.abs(target - cur) * 7);
       L.cam = { from: cur, to: target, start: now, dur };
       if (!modeChanged && target > cur) L.diveUntil = now + dur;
     }
@@ -224,7 +233,8 @@ export default function OceanScene({ mode, depth, feedback = null, showGauge = f
     const L = live.current;
     const now = performance.now();
     if (feedback.kind === "correct") {
-      for (let i = 0; i < 26; i++) L.burst.push({ d: 0, x: (Math.random() - 0.5) * 18, v: 6 + Math.random() * 14, born: now + i * 18 });
+      const n = Math.round(12 + (feedback.meters ?? 30) * 0.9);
+      for (let i = 0; i < n; i++) L.burst.push({ d: 0, x: (Math.random() - 0.5) * 18, v: 6 + Math.random() * 14, born: now + i * 18 });
       return;
     }
     L.shakeUntil = now + (L.reduced ? 0 : 420);
@@ -569,7 +579,7 @@ export default function OceanScene({ mode, depth, feedback = null, showGauge = f
       // ---------- gauge (DOM)
       if (rulerRef.current) rulerRef.current.style.transform = `translate3d(0, ${Math.round((wl + SUB_OFFSET_M * M) * P)}px, 0)`;
       if (depthLabelRef.current) {
-        const shown = Math.max(0, Math.round(cam - SUB_OFFSET_M));
+        const shown = Math.max(0, Math.round((cam - SUB_OFFSET_M) / scaleRef.current));
         const txt = `${blend < 0.5 ? 0 : shown} M`;
         if (depthLabelRef.current.textContent !== txt) depthLabelRef.current.textContent = txt;
       }
@@ -593,8 +603,9 @@ export default function OceanScene({ mode, depth, feedback = null, showGauge = f
     };
   }, []);
 
+  // ticks every 10 real meters (labels every 50 m), placed at scene depth
   const ticks: number[] = [];
-  for (let d = 0; d <= maxGauge; d += 10) ticks.push(d);
+  for (let d = 0; d * visualScale <= maxGauge; d += 10) ticks.push(d);
 
   return (
     <div ref={wrapRef} className="ocean-scene" aria-hidden="true">
@@ -603,7 +614,7 @@ export default function OceanScene({ mode, depth, feedback = null, showGauge = f
         <div className="gauge">
           <div ref={rulerRef} className="gauge-ruler">
             {ticks.map((d) => (
-              <div key={d} className={`gauge-tick ${d % 50 === 0 ? "major" : ""}`} style={{ top: `calc(var(--mpx) * ${d})` }}>
+              <div key={d} className={`gauge-tick ${d % 50 === 0 ? "major" : ""}`} style={{ top: `calc(var(--mpx) * ${d * visualScale})` }}>
                 {d % 50 === 0 && <span>{d}</span>}
               </div>
             ))}
@@ -614,8 +625,8 @@ export default function OceanScene({ mode, depth, feedback = null, showGauge = f
         </div>
       )}
       {feedback?.kind === "correct" && (
-        <div key={feedback.key} className="dive-popup">
-          +{metersPerCorrect} M
+        <div key={feedback.key} className={`dive-popup ${(feedback.meters ?? 0) >= 30 ? "big" : ""}`}>
+          +{feedback.meters ?? 0} M
         </div>
       )}
     </div>

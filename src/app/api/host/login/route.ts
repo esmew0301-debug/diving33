@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const body = await readJson(req);
     const token = await hostLogin(body.password);
     const res = json({ ok: true });
-    setHostCookie(res, token);
+    setHostCookie(req, res, token);
     return res;
   } catch (e) {
     return handleError(e);

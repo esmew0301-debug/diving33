@@ -987,3 +987,257 @@ body {
     transform: none;
   }
 }
+
+/* ============================================================
+   v2 additions — host/player entry, final countdown, wrong-answer bounce,
+   projected leaderboard. All built from the existing tokens above.
+   ============================================================ */
+
+/* ---------- entry: HOST / PLAYER ---------- */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 4px;
+}
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: clamp(120px, 30vw, 150px);
+  padding: 14px 8px 12px;
+  border: 0;
+  background: var(--navy-700);
+  color: var(--foam);
+  font-family: var(--font-display);
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow:
+    0 -4px 0 0 var(--foam),
+    0 4px 0 0 var(--foam),
+    -4px 0 0 0 var(--foam),
+    4px 0 0 0 var(--foam),
+    inset 0 -5px 0 0 var(--navy-900);
+  transition: transform 80ms steps(2), filter 80ms;
+}
+.role-card b {
+  font-size: clamp(16px, 4.6vw, 22px);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--pink);
+  text-shadow: 3px 3px 0 var(--navy-900);
+}
+.role-card.player b {
+  color: var(--yellow);
+}
+.role-card small {
+  font-size: 8px;
+  color: var(--sea-300);
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+.role-card .ico {
+  width: 36px;
+  height: 27px;
+  image-rendering: pixelated;
+}
+.role-card:hover {
+  filter: brightness(1.15);
+  transform: translateY(-2px);
+}
+.role-card:active {
+  transform: translateY(2px);
+}
+.role-card:focus-visible {
+  outline: 4px solid var(--cyan);
+  outline-offset: 6px;
+}
+
+.tile .tile-label {
+  font-size: 7px;
+  color: var(--sea-300);
+  letter-spacing: 0.06em;
+}
+.tile[aria-pressed="true"] .tile-label {
+  color: var(--navy-700);
+}
+.tile {
+  height: clamp(70px, 18vw, 86px);
+}
+.slot-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  font-size: 9px;
+}
+
+.await-host .ico {
+  display: block;
+  margin: 0 auto;
+  width: 48px;
+  height: 36px;
+  image-rendering: pixelated;
+  animation: bob 1.6s steps(4) infinite;
+}
+
+/* ---------- wrong answer: red input + pixel bounce ---------- */
+.px-input.wrong,
+.px-input.wrong:focus {
+  background: #ffd6e0;
+  color: var(--coral-dk);
+  box-shadow:
+    0 -4px 0 0 var(--coral),
+    0 4px 0 0 var(--coral),
+    -4px 0 0 0 var(--coral),
+    4px 0 0 0 var(--coral),
+    inset 0 4px 0 0 rgba(201, 61, 99, 0.25),
+    0 0 0 8px rgba(255, 111, 145, 0.3);
+}
+.bounce {
+  animation: px-bounce 460ms steps(8);
+}
+@keyframes px-bounce {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  15% {
+    transform: translate(-10px, -6px);
+  }
+  30% {
+    transform: translate(9px, 0);
+  }
+  45% {
+    transform: translate(-7px, -4px);
+  }
+  60% {
+    transform: translate(5px, 0);
+  }
+  75% {
+    transform: translate(-3px, -2px);
+  }
+}
+
+/* ---------- final 3-2-1 countdown ---------- */
+.timer.final > i {
+  background: var(--coral);
+  animation: blink 300ms steps(2) infinite;
+}
+.final-box {
+  --line: var(--coral);
+}
+.final-count {
+  display: inline-block;
+  min-width: 1ch;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 9vw, 64px);
+  line-height: 1;
+  color: var(--coral);
+  text-shadow:
+    4px 4px 0 var(--navy-900),
+    -3px -3px 0 var(--white);
+  animation: count-pop 1s steps(10) forwards;
+}
+@keyframes count-pop {
+  0% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(0.9);
+  }
+  40% {
+    transform: scale(1.08);
+  }
+  85% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+.final-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 10px var(--coral),
+    inset 0 0 0 16px rgba(255, 111, 145, 0.35);
+  animation: blink 500ms steps(2) infinite;
+}
+.dive-popup.big {
+  font-size: 22px;
+  color: var(--yellow);
+}
+
+/* ---------- leaderboard (depth) ---------- */
+.lb-name {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.lb-depth {
+  font-size: 13px;
+}
+.lb-big .lb-row {
+  grid-template-columns: 64px 1fr auto;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.lb-big .lb-rank {
+  font-size: clamp(22px, 3vw, 34px);
+}
+.lb-big .lb-name {
+  font-size: clamp(13px, 1.8vw, 22px);
+}
+.lb-big .lb-depth {
+  font-size: clamp(16px, 2.4vw, 30px);
+}
+.lb-big .lb-bar {
+  height: 14px;
+}
+.lb-big .lb-row.first {
+  box-shadow: 0 0 0 4px var(--yellow);
+}
+.lb-big .small {
+  font-size: clamp(14px, 1.4vw, 18px);
+}
+
+/* ---------- host status tiles ---------- */
+.host-groups {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+  gap: 14px;
+  padding: 4px;
+}
+.host-groups .slot {
+  padding: 16px 6px 14px;
+  font-size: clamp(9px, 1.2vw, 12px);
+}
+.host-groups .slot.done {
+  box-shadow: 0 0 0 3px var(--cyan);
+  color: var(--cyan);
+}
+@media (max-width: 520px) {
+  .host-groups {
+    --cols: 2 !important;
+  }
+  .lb-big .lb-row {
+    grid-template-columns: 36px 1fr auto;
+    padding: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .final-count,
+  .final-vignette,
+  .bounce {
+    animation: none;
+  }
+}
