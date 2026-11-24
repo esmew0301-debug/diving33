@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
+import { DatabaseNotConfiguredError } from "./db";
 import { GameError } from "./game";
 
 const buckets = new Map<string, { tokens: number; at: number }>();
@@ -42,9 +43,30 @@ export function json(data: unknown, status = 200) {
 
 export function handleError(e: unknown) {
   if (e instanceof GameError) return json({ error: e.message, code: e.code }, e.status);
+  if (e instanceof DatabaseNotConfiguredError) {
+    console.error(e.message);
+    return json({ error: e.message, code: "db_not_configured" }, 503);
+  }
   console.error(e);
-  const msg = e instanceof Error && e.message.includes("DATABASE_URL") ? e.message : "Something went wrong on the server. Please try again.";
-  return json({ error: msg, code: "server_error" }, 500);
+  if (isConnectionError(e)) {
+    return json(
+      { error: "The game server can't reach its database. Check DATABASE_URL (Supabase transaction pooler URI with the password filled in).", code: "db_unreachable" },
+      503,
+    );
+  }
+  return json({ error: "Something went wrong on the server. Please try again.", code: "server_error" }, 500);
+}
+
+/** Network / auth failures talking to Postgres (details stay in the server log, never in the response). */
+export function isConnectionError(e: unknown): boolean {
+  const code = String((e as { code?: unknown })?.code ?? "");
+  return (
+    ["ENOTFOUND", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "CONNECT_TIMEOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "CONNECTION_DESTROYED"].includes(code) ||
+    code === "28P01" || // invalid password
+    code === "28000" || // invalid authorization
+    code === "3D000" || // database does not exist
+    code.startsWith("08") // connection exceptions
+  );
 }
 
 export async function readJson(req: NextRequest): Promise<Record<string, unknown>> {

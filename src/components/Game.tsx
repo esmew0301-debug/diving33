@@ -29,7 +29,7 @@ function viewOf(state: PublicState | null, chosePlayer: boolean, now: number): V
 }
 
 export default function Game() {
-  const { state, setState, refresh, offline, serverNow } = useLiveState();
+  const { state, setState, refresh, offline, serverNow, problem } = useLiveState();
   const [feedback, setFeedback] = useState<SceneFeedback>(null);
   const [howTo, setHowTo] = useState(false);
   const [chosePlayer, setChosePlayer] = useState(false);
@@ -59,7 +59,7 @@ export default function Game() {
             </span>
           </div>
         )}
-        {view === "loading" && <Loading />}
+        {view === "loading" && <Loading problem={problem} />}
         {view === "entry" && <Entry onPlayer={() => setChosePlayer(true)} onHowTo={() => setHowTo(true)} />}
         {view === "await-host" && <AwaitHost onBack={() => setChosePlayer(false)} />}
         {view === "groups" && state && <Groups state={state} onJoined={refresh} onBack={() => setChosePlayer(false)} onHowTo={() => setHowTo(true)} />}
@@ -98,12 +98,25 @@ export default function Game() {
   );
 }
 
-function Loading() {
+function Loading({ problem }: { problem?: string | null }) {
   return (
-    <div style={{ margin: "auto", textAlign: "center" }}>
+    <div style={{ margin: "auto", textAlign: "center", width: "min(560px, 100%)" }}>
       <p className="display" style={{ fontSize: 12, color: "var(--navy-800)" }}>
         Loading the ocean<span className="dots" />
       </p>
+      {problem && (
+        <div className="px-box" role="alert" style={{ padding: "16px 16px 12px", marginTop: 18, textAlign: "left" }}>
+          <p className="display" style={{ fontSize: 10, color: "var(--coral)", margin: "0 0 10px", lineHeight: 1.6 }}>
+            The game server isn&apos;t ready
+          </p>
+          <p className="body-text" style={{ margin: 0 }}>
+            {problem}
+          </p>
+          <p className="small" style={{ margin: "10px 0 0" }}>
+            This page keeps retrying and continues automatically once the server is fixed.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

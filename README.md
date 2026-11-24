@@ -57,7 +57,7 @@ After a rehearsal, start a clean game with the small **"Reset: start a new game"
 2. Set **Environment Variables**: `DATABASE_URL` (required) and **`HOST_PASSWORD`** = your host password (required; server-side only; keep it out of the repo). Optional: `GROUP_COUNT` (default 4), `GROUP_CAPACITY` (default 4).
 3. Deploy, and put the link or a QR code on your slide.
 
-On Vercel, the app refuses to start without `DATABASE_URL`, and host login is disabled without `HOST_PASSWORD`. Supabase free projects pause after about a week of inactivity, so open the site the day before class.
+On Vercel, the app refuses to run without a database (serverless functions have no shared disk, so an embedded database would split the class into separate games). The page then shows "The game server isn't ready" with the reason, and `/api/state` returns 503 `db_not_configured`. If you connect Supabase through Vercel's **Storage / Marketplace integration** instead, its `POSTGRES_URL` variable is picked up automatically (extra integration flags are stripped). Host login is disabled without `HOST_PASSWORD`. Environment variable changes only apply after a **redeploy**. Supabase free projects pause after about a week of inactivity, so open the site the day before class.
 
 ---
 

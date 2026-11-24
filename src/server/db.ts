@@ -26,10 +26,47 @@ declare global {
   var __oceanDb: Promise<Db> | undefined;
 }
 
-async function createPostgres(url: string): Promise<Db> {
+/** Variables checked, in order. Vercel's Supabase / Neon / Postgres integrations create the POSTGRES_* ones. */
+export const DATABASE_ENV_KEYS = ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL", "SUPABASE_DB_URL"] as const;
+
+export class DatabaseNotConfiguredError extends Error {
+  constructor() {
+    super(
+      "DATABASE_URL is not set. Production needs a real Postgres database (e.g. Supabase): add DATABASE_URL in Vercel → Settings → Environment Variables, then redeploy. See README.md.",
+    );
+  }
+}
+
+/**
+ * Pick the Postgres connection string and make it safe for postgres.js:
+ *  - integration URLs carry extra query flags (e.g. `supa=base-pooler.x`, `pgbouncer=true`) that postgres.js would
+ *    forward to the server as settings, which Postgres rejects ("unrecognized configuration parameter"). Drop them.
+ *  - keep sslmode; default to SSL ("require") for any non-local host.
+ */
+export function resolveDatabaseUrl(env: Record<string, string | undefined> = process.env): { url: string; ssl: false | "require" | string; source: string } | null {
+  for (const key of DATABASE_ENV_KEYS) {
+    const raw = env[key]?.trim();
+    if (!raw) continue;
+    const u = new URL(raw);
+    const sslmode = u.searchParams.get("sslmode");
+    u.search = "";
+    const local = ["localhost", "127.0.0.1", "::1"].includes(u.hostname);
+    const ssl = sslmode === "disable" ? false : sslmode && sslmode !== "prefer" && sslmode !== "allow" ? sslmode : local ? false : "require";
+    return { url: u.toString(), ssl, source: key };
+  }
+  return null;
+}
+
+async function createPostgres(conn: NonNullable<ReturnType<typeof resolveDatabaseUrl>>): Promise<Db> {
   const { default: postgres } = await import("postgres");
   // prepare:false keeps us compatible with the Supabase transaction pooler (port 6543).
-  const sql = postgres(url, { max: Number(process.env.DB_POOL_MAX) || 5, prepare: false, idle_timeout: 20, connect_timeout: 15 });
+  const sql = postgres(conn.url, {
+    max: Number(process.env.DB_POOL_MAX) || 5,
+    prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 15,
+    ssl: conn.ssl as never,
+  });
   const run = async <T extends Row>(s: { unsafe: typeof sql.unsafe }, text: string, params: unknown[] = []) =>
     (await s.unsafe(text, params as never[])) as unknown as T[];
   return {
@@ -64,16 +101,13 @@ async function createPglite(): Promise<Db> {
 }
 
 async function init(): Promise<Db> {
-  const url = process.env.DATABASE_URL;
+  const conn = resolveDatabaseUrl();
   let db: Db;
-  if (url) {
-    db = await createPostgres(url);
+  if (conn) {
+    db = await createPostgres(conn);
   } else {
-    if (process.env.VERCEL || process.env.REQUIRE_DATABASE_URL === "1") {
-      throw new Error(
-        "DATABASE_URL is not set. Production needs a real Postgres database (e.g. Supabase). See README.md.",
-      );
-    }
+    // Serverless functions have no shared disk: an embedded database would give every instance its own game.
+    if (process.env.VERCEL || process.env.REQUIRE_DATABASE_URL === "1") throw new DatabaseNotConfiguredError();
     db = await createPglite();
   }
   const ddl = fs.readFileSync(MIGRATION_FILE, "utf8");
