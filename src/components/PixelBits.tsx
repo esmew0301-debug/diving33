@@ -16,7 +16,7 @@ export function SubIcon({ dim = false, color = "#ffd23f" }: { dim?: boolean; col
   );
 }
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, hideClose = false }: { title: string; onClose: () => void; children: ReactNode; hideClose?: boolean }) {
   return (
     <div className="modal-back" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="px-box" style={{ maxWidth: 520, width: "100%", padding: 22 }} onClick={(e) => e.stopPropagation()}>
@@ -24,11 +24,13 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
           {title}
         </h2>
         {children}
-        <div style={{ marginTop: 18, textAlign: "right" }}>
-          <button className="px-btn small-btn" onClick={onClose} autoFocus>
-            Got it
-          </button>
-        </div>
+        {!hideClose && (
+          <div style={{ marginTop: 18, textAlign: "right" }}>
+            <button className="px-btn small-btn" onClick={onClose} autoFocus>
+              Got it
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -36,11 +38,11 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 
 export function HowToPlay({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [
-    ["4", "Join your group. When all 4 divers are in, press Start Game."],
-    ["7", "questions, at your own pace. Type one answer for each (25 s)."],
-    ["+1", "Correct = +1 group credit and your sub dives 100 m deeper."],
-    ["0", "Wrong = 0 points. You stay at your depth, but keep playing."],
-    ["?", "Other groups' scores stay secret. The leaderboard appears when every diver has finished."],
+    ["1–4", "Pick your group and enter your name. Anyone in the group can press Start Game."],
+    ["7", "questions for the whole group together: 30 s each, then a final 3… 2… 1…"],
+    ["+30", "First correct answer within 10 s = +30 m, within 20 s = +20 m, later = +10 m."],
+    ["0", "Wrong? +0 m, your sub stays put. Try again until time runs out."],
+    ["?", "Other groups' depths stay secret. The host reveals the final ranking when every team has finished."],
   ];
   return (
     <Modal title="How to play" onClose={onClose}>

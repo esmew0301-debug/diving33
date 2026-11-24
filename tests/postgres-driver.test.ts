@@ -27,27 +27,26 @@ afterAll(async () => {
 });
 
 describe("postgres.js driver (production path)", () => {
-  it("runs join → start → answer → timeout → reveal → history", async () => {
+  it("runs open → join → group start → retry → depth scoring → timeouts → reveal → history", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     let T = Date.now();
     const at = (d: number) => vi.setSystemTime((T += d));
-    await g.newGame({ groupCount: 1, groupCapacity: 2 });
+    await g.newGame({ groupCount: 1, groupCapacity: 2, open: true });
     const a = await g.joinGroup({ groupNumber: 1, name: "Ana <b>" });
-    const b = await g.joinGroup({ groupNumber: "1" });
+    const b = await g.joinGroup({ groupNumber: "1", name: "Ben" });
     await g.startGame(a.token);
-    await g.startGame(b.token);
-    at(3000);
+    at(3000 + 4000);
     const r1 = await g.submitAnswer(a.token, QUESTIONS[0].id, "CO₂");
-    expect(r1).toMatchObject({ isCorrect: true, groupCredits: 1, personalDepthAfter: 100 });
+    expect(r1).toMatchObject({ isCorrect: true, depthAwarded: 30, personalDepth: 30 });
     expect((await g.submitAnswer(a.token, QUESTIONS[0].id, "CO₂")).duplicate).toBe(true);
-    expect(await g.submitAnswer(b.token, QUESTIONS[0].id, "oxygen")).toMatchObject({ isCorrect: false, personalDepthAfter: 0 });
+    expect(await g.submitAnswer(b.token, QUESTIONS[0].id, "oxygen")).toMatchObject({ isCorrect: false, depthAwarded: 0, personalDepth: 0 });
     at(20 * 60 * 1000); // everything else times out
     const st = await g.getPublicState(a.token);
     expect(st.session.status).toBe("revealed");
     expect(st.me?.displayName).toBe("Ana b");
-    expect(st.leaderboard?.[0]).toMatchObject({ groupNumber: 1, credits: 1, members: 2, rank: 1 });
+    expect(st.leaderboard?.[0]).toMatchObject({ groupNumber: 1, totalDepth: 30, members: 2, rank: 1 });
     const h = await g.getHistory(b.token);
-    expect(h.entries[0]).toMatchObject({ myAnswer: "oxygen", isCorrect: false });
-    expect(h.entries[1]).toMatchObject({ myAnswer: null, status: "timeout" });
+    expect(h.entries[0]).toMatchObject({ myAnswer: "oxygen", isCorrect: false, depthAwarded: 0 });
+    expect(h.entries[1]).toMatchObject({ myAnswer: null, attempts: [] });
   });
 });

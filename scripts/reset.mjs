@@ -10,9 +10,9 @@ if (url) {
   const sql = postgres(url, { max: 1, prepare: false });
   const r = await sql`update sessions set is_current = false where is_current returning id`;
   await sql.end();
-  console.log(r.length ? "Archived the current game. A fresh game opens on the next visit." : "No current game — a fresh one opens on the next visit.");
+  console.log(r.length ? "Archived the current game. A fresh game opens when the host logs in." : "No current game — a fresh one opens on the next visit.");
 } else {
   const dir = process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite");
   fs.rmSync(dir, { recursive: true, force: true });
-  console.log(`Deleted the local database at ${dir}. Start the app again (npm run dev) for a fresh game.`);
+  console.log(`Deleted the local database at ${dir}. Start the app again (npm run dev); the game opens when the host logs in.`);
 }
