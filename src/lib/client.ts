@@ -76,6 +76,8 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
 export function useLiveState() {
   const [state, setState] = useState<PublicState | null>(null);
   const [offline, setOffline] = useState(false);
+  /** Server-side setup problem (e.g. no database configured on Vercel), shown instead of an endless spinner. */
+  const [problem, setProblem] = useState<string | null>(null);
   const offsetRef = useRef(0);
   const inflight = useRef(false);
 
@@ -92,8 +94,10 @@ export function useLiveState() {
       if (stored && stored.sessionId !== s.session.id) setToken(null);
       setState(s);
       setOffline(false);
-    } catch {
+      setProblem(null);
+    } catch (e) {
       setOffline(true);
+      setProblem(e instanceof ApiError && (e.code === "db_not_configured" || e.code === "db_unreachable") ? e.message : null);
     } finally {
       inflight.current = false;
     }
@@ -120,7 +124,7 @@ export function useLiveState() {
   }, [refresh]);
 
   const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
-  return { state, setState, refresh, offline, serverNow };
+  return { state, setState, refresh, offline, serverNow, problem };
 }
 
 /** Re-render every `ms` while `active`. */

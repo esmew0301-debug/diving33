@@ -31,13 +31,15 @@ export default function HostPage() {
   const [auth, setAuth] = useState<Auth>("checking");
   const [state, setState] = useState<HostState | null>(null);
   const [offline, setOffline] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const inflight = useRef(false);
 
   const refresh = useCallback(async () => {
     if (inflight.current) return;
     inflight.current = true;
     try {
-      const r = await hostFetch<HostState>("/api/host/state");
+      const r = await hostFetch<HostState & { code?: string }>("/api/host/state");
+      setProblem(r.data.code === "db_not_configured" || r.data.code === "db_unreachable" ? (r.data.error ?? null) : null);
       if (r.status === 401) {
         setAuth("login");
         setState(null);
@@ -56,7 +58,7 @@ export default function HostPage() {
   useEffect(() => {
     const first = setTimeout(refresh, 0);
     const id = setInterval(() => {
-      if (auth === "in" && !document.hidden) refresh();
+      if (auth !== "login" && !document.hidden) refresh();
     }, POLL_MS);
     return () => {
       clearTimeout(first);
@@ -82,6 +84,16 @@ export default function HostPage() {
             <p className="display" style={{ fontSize: 12, color: "var(--navy-800)" }}>
               Loading the ocean<span className="dots" />
             </p>
+            {problem && (
+              <div className="px-box" role="alert" style={{ padding: "16px 16px 12px", marginTop: 18, textAlign: "left", maxWidth: 560 }}>
+                <p className="display" style={{ fontSize: 10, color: "var(--coral)", margin: "0 0 10px", lineHeight: 1.6 }}>
+                  The game server isn&apos;t ready
+                </p>
+                <p className="body-text" style={{ margin: 0 }}>
+                  {problem}
+                </p>
+              </div>
+            )}
           </div>
         )}
         {auth === "login" && <Login onIn={refresh} />}
